@@ -234,6 +234,84 @@ class Transform(object):
         self.filter += ';{};[{}][{}]{}'.format(filter2, name, name2, merger)
         self.name = None
 
+# 混合：前八种变换方式随机混合
+
+
+def randomized_transform(inputs: List[str], watermark_images: List[str], outputs: Optional[List[str]] = None):
+    """
+    将前八种变换方式随机混合
+
+    :param inputs: 输入文件列表
+    :param watermark_images: 水印文件列表
+    :param outputs: 输出文件列表，若不传则在原文件名后加 '_transformed' 并保存到原目录，若传入则应保证与 inputs 列表长度一致
+    :returns: self
+    """
+    assert outputs is None or len(inputs) == len(
+        outputs), 'len(inputs) should be equal to len(outputs)'
+    import random
+    import os
+
+    def random_watermark(transform: Transform):
+        transform.watermark(
+            random.choice(watermark_images),
+            alpha=random.random(),
+            x='{}*(W-w)'.format(random.random()),
+            y='{}*(H-h)'.format(random.random()),
+            scale=random.random() * 2,
+            angle=random.random() * 360
+        )
+
+    def random_padding(transform: Transform):
+        transform.padding(
+            top='{}*ih'.format(random.random() * 0.25),
+            right='{}*iw'.format(random.random() * 0.25),
+            bottom='{}*ih'.format(random.random() * 0.25),
+            left='{}*iw'.format(random.random() * 0.25),
+        )
+
+    def random_duration(transform: Transform):
+        transform.duration(0.9 + random.random() * 0.1)
+
+    def random_scale(transform: Transform):
+        transform.scale(0.4 + random.random() * 0.8)
+
+    def random_rotate(transform: Transform):
+        transform.rotate(random.random() * 360)
+
+    def random_brightness(transform: Transform):
+        transform.brightness(0.4 + random.random() * 0.8)
+
+    def random_mirror(transform: Transform):
+        transform.mirror()
+
+    def random_crop(transform: Transform):
+        w = '{}*iw'.format(0.9 + random.random() * 0.1)
+        h = '{}*iw'.format(0.9 + random.random() * 0.1)
+        transform.crop(
+            w=w,
+            h=h,
+            x='{}*(iw-{})'.format(random.random(), w),
+            y='{}*(ih-{})'.format(random.random(), h),
+        )
+
+    transform_methods = [
+        random_watermark,
+        random_padding,
+        random_duration,
+        random_scale,
+        random_rotate,
+        random_brightness,
+        random_mirror,
+        random_crop
+    ]
+    for i, input in enumerate(inputs):
+        transform = Transform(input)
+        for method in random.choices(transform_methods, k=random.randint(
+                1, len(transform_methods))):
+            method(transform)
+        transform.run(outputs[i] if outputs is not None else '_transformed'.join(
+            os.path.splitext(input)))
+
 
 if __name__ == "__main__":
     print(Transform(r'E:\short_videoes\orig\bad_apple.mp4').duration(
