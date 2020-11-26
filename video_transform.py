@@ -4,7 +4,7 @@ from __future__ import annotations
 # python >= 3.7.0b1 才可使用，python >= 3.10 开始不再需要 import，如果你的 python 版本不够，尝试注释掉该条 import 语句并删除带有 Transform 字样的类型标注或是将其改为字符串 'Transform' 即可让其运行起来
 
 import json
-import os
+import subprocess
 from typing import List, Optional, Union
 
 
@@ -30,41 +30,47 @@ class Transform(object):
         self.name: Optional[str] = self.__input(input)
         self.now_duration = None
 
-    def generate_cmd(self, output: str, quiet: bool = True, y: bool = True) -> str:
+    def generate_cmd(self, output: str, quiet: bool = True, y: bool = True, accurate_seek: bool = False) -> List[str]:
         """
         生成变换用的命令
 
         :param output: 输出文件路径
         :param quiet: 静默模式，对应 ffmpeg 的 -v quiet
         :param y: 不进行确认，对应 ffmpeg 的 -y
+        :param accurate_seek: 精准时间切割，对应 ffmpeg 的 -accurate_seek -avoid_negative_ts 1
         :returns: 变换用的命令
         :raises AssertionError
         """
         assert self.parent is self, 'should be called against main branch'
-        input = ' '.join(('-i \'{}\''.format(file) for file in self.input))
-        duration = '-ss 0 -t {}'.format(
-            self.now_duration) if self.now_duration is not None else ''
+        cmd = ['ffmpeg']
+        for file in self.input:
+            cmd += ['-i', file]
+        if self.now_duration is not None:
+            cmd += ['-ss', '0', '-t', str(self.now_duration)]
+            if accurate_seek:
+                cmd += ['-accurate_seek', '-avoid_negative_ts', '1']
         if self.filter:
             mapped_video, _ = self.__end()
-            filter = '-filter_complex \'{}\' -map [{}] -map 0:a'.format(
-                self.filter, mapped_video)
-        else:
-            filter = ''
+            cmd += ['-filter_complex', self.filter, '-map',
+                    '[{}]'.format(mapped_video), '-map', '0:a']
+        if quiet:
+            cmd += ['-v', 'quiet']
+        if y:
+            cmd += ['-y']
+        cmd += [output]
 
-        quiet_arg = '-v quiet' if quiet else ''
-        y_arg = '-y' if y else ''
+        return cmd
 
-        return 'ffmpeg {} {} {} {} {} {}'.format(input, duration, filter, quiet_arg, y_arg, output)
-
-    def run(self, output: str) -> int:
+    def run(self, output: str, **kwargs) -> subprocess.CompletedProcess[bytes]:
         """
         执行变换
 
         :param output: 输出文件路径
-        :returns: ffmpeg 返回的状态码
+        :param **kwargs: 其它 param 参考 generate_cmd()
+        :returns: CompletedProcess 对象
         :raises AssertionError
         """
-        return os.system(self.generate_cmd(output))
+        return subprocess.run(self.generate_cmd(output, **kwargs), check=True, stderr=subprocess.STDOUT)
 
     # 水印/字幕：水印/字幕图像，透明度，位置，大小，角度
     def watermark(self, image: str, alpha: float = 1.0, x: Union[int, str] = 0, y: Union[int, str] = 0, scale: float = 1.0, angle: float = 0.0):
@@ -111,9 +117,10 @@ class Transform(object):
         """
         assert self.parent is self, 'should be called against main branch'
         if self.now_duration is None:
-            cmd = 'ffprobe -v quiet -print_format json -show_format {}'.format(
-                self.input[0])
-            info = json.loads(os.popen(cmd).read())
+            cmd = ['ffprobe', '-v', 'quiet', '-print_format',
+                   'json', '-show_format', self.input[0]]
+            info = json.loads(subprocess.run(
+                cmd, capture_output=True, check=True).stdout)
             self.now_duration = float(info['format']['duration'])
         self.now_duration *= ratio
         return self
@@ -229,5 +236,5 @@ class Transform(object):
 
 
 if __name__ == "__main__":
-    print(Transform('E:\\short_videoes\\orig\\bad_apple.mp4').duration(
-        0.2).scale(2.0).watermark('watermark.png', scale=0.5, alpha=1, angle=45).generate_cmd('wtf.mp4', quiet=False))
+    print(Transform(r'E:\short_videoes\orig\bad_apple.mp4').duration(
+        0.2).scale(2.0).watermark(r'C:\Users\LiuYuxin\Desktop\watermark.png', scale=0.5, alpha=1, angle=45).run(r'C:\Users\LiuYuxin\Desktop\wtf.mp4', quiet=False))
