@@ -7,19 +7,19 @@ from transform import FilePath, MethodName, RandomizedTransform, Transform
 parser = argparse.ArgumentParser(
     description='Transform input file(s) with ffmpeg')
 
-parser.add_argument('input', type=str, action='append', nargs='+',
+parser.add_argument('input', type=str, nargs='+',
                     help='input file(s) or folder(s) containing input file(s)')
 parser.add_argument('-of', '--output_folder', required=False, type=str,
                     help='output folder, if not set, saves name_transformed.suffix into the input folder')
 
 parser.add_argument('-f', '--function', required=False,
-                    type=str, action='append', nargs='+', help='transform method(s), ordering decides apply order if mixing is not enabled, available methods: {}'.format(' ,'.join(Transform.methods)))
+                    type=str, nargs='+', help='transform method(s), ordering decides apply order if mixing is not enabled, available methods: {}'.format(' ,'.join(Transform.methods)))
 parser.add_argument('-r', '--randomize', required=False, action='store_true',
                     help='use randomized data instead of default data')
 
 # 1 watermark
 watermark = parser.add_argument_group('watermark', 'add watermark')
-watermark.add_argument('-wi', '--watermark_image', required=False, type=str, action='append',
+watermark.add_argument('-wi', '--watermark_image', required=False, type=str,
                        nargs='+', help='watermark image(s) or folder(s) containing watermark image(s)')
 watermark.add_argument('-wa', '--watermark_alpha', required=False, type=float,
                        help='alpha of watermark, (0, 1], 0 = totally transparent, 1 = totally not transparent')

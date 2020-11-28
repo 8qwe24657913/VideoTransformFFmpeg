@@ -6,7 +6,8 @@ from __future__ import annotations
 import os
 import random
 import subprocess
-from typing import Callable, Dict, List, Optional, Sequence, TypeVar, Union
+from typing import (Callable, Dict, List, Optional, Sequence, Tuple, TypeVar,
+                    Union)
 
 # ffmpeg 表达式
 Expression = Union[int, float, str]
@@ -169,7 +170,9 @@ class Transform(object):
         :returns: self
         """
         if ratio != 1.0:
-            self.__chain('scale=iw*{}:ih*{}'.format(ratio, ratio))
+            # 为什么只能是偶数？
+            self.__chain(
+                'scale=round(iw*{}/2)*2:round(ih*{}/2)*2'.format(ratio, ratio))
         return self
 
     # 镜像
@@ -179,7 +182,7 @@ class Transform(object):
 
         :returns: self
         """
-        self.__chain('hfilp')
+        self.__chain('hflip')
         return self
 
     # 旋转：旋转角度
@@ -316,38 +319,42 @@ class Transform(object):
             transform = cls(input)
             for method in random.sample(methods, k=choice(k)):
                 kwargs = {
-                    name: choice(argument) for name, argument in choice(args.get(method, default={})).items()
+                    name: choice(argument) for name, argument in choice(args.get(method, {})).items()
                 }
                 getattr(cls, method)(transform, **kwargs)
             transform.run(assign_output(input))
 
     # 以下为内部方法，不做调用方法注释，也不应被手动调用
-    def __input(self, input: FilePath):
+    def __input(self, input: FilePath) -> str:
         self.parent.input.append(input)
         return str(len(self.parent.input) - 1)
 
-    def __gen_temp(self):
+    def __gen_temp(self) -> str:
         self.parent.temp_idx += 1
         return "temp{}".format(self.parent.temp_idx)
 
-    def __end(self):
+    def __end(self) -> Tuple[str, str]:
         if self.name:
             return self.name, self.filter
         name = self.__gen_temp()
         self.filter += '[{}]'.format(name)
         return name, self.filter
 
+    def __sep(self, sep) -> str:
+        return sep if self.filter != '' else ''
+
     def __chain(self, filter: str):
         if self.name:
             self.filter += '[{}]{}'.format(self.name, filter)
             self.name = None
         else:
-            self.filter += (',' if self.filter[-1] != ']' else '') + filter
+            self.filter += self.__sep(',') + filter
 
     def __merge(self, another: Transform, merger: str):
         name, _ = self.__end()
         name2, filter2 = another.__end()
-        self.filter += ';{};[{}][{}]{}'.format(filter2, name, name2, merger)
+        self.filter += '{}{};[{}][{}]{}'.format(
+            self.__sep(';'), filter2, name, name2, merger)
         self.name = None
 
 
@@ -420,7 +427,7 @@ class RandomizedTransform(Transform):
         angle: Optional[float] = None,
     ):
         if angle is None:
-            angle = random.random() * 360
+            angle = random.randint(0, 3) * 90.0
         self.__super().rotate(angle)
         return self
 
@@ -429,7 +436,7 @@ class RandomizedTransform(Transform):
         brightness: Optional[float] = None,
     ):
         if brightness is None:
-            brightness = 0.4 + random.random() * 0.8
+            brightness = 0.4 * random.random() - 0.2
         self.__super().brightness(brightness)
         return self
 
