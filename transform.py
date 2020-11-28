@@ -240,22 +240,24 @@ class Transform(object):
                 "format=rgba,colorchannelmixer=aa={}".format(alpha))
         return self
 
+    methods: Sequence[MethodName] = (
+        'watermark',
+        'padding',
+        'duration',
+        'scale',
+        'rotate',
+        'brightness',
+        'mirror',
+        'crop',
+    )
+
     # 混合：前八种变换方式随机混合
     @classmethod
     def mixed(
         cls,
-        inputs: List[FilePath],
+        inputs: Sequence[FilePath],
         args: ArgumentsForMethod = {},
-        methods: Sequence[MethodName] = (
-            'watermark',
-            'padding',
-            'duration',
-            'scale',
-            'rotate',
-            'brightness',
-            'mirror',
-            'crop',
-        ),
+        methods: Sequence[MethodName] = methods,
         k: Optional[Chooseable[int]] = None,
         assign_output: Callable[[FilePath], FilePath] = lambda input: '_transformed'.join(os.path.splitext(input)),
     ):
@@ -355,48 +357,93 @@ class RandomizedTransform(Transform):
     def __super(self):
         return super(RandomizedTransform, self)
 
-    def watermark(self,
-                  image: str,
-                  alpha: float = random.random(),
-                  x: Expression = '{}*(W-w)'.format(random.random()),
-                  y: Expression = '{}*(H-h)'.format(random.random()),
-                  scale: float = random.random() * 2,
-                  angle: float = random.random() * 360,
-                  ):
+    def watermark(
+        self,
+        image: str,
+        alpha: Optional[float] = None,
+        x: Optional[Expression] = None,
+        y: Optional[Expression] = None,
+        scale: Optional[float] = None,
+        angle: Optional[float] = None,
+    ):
+        if alpha is None:
+            alpha = random.random()
+        if x is None:
+            x = '{}*(W-w)'.format(random.random())
+        if y is None:
+            y = '{}*(H-h)'.format(random.random())
+        if scale is None:
+            scale = random.random() * 2
+        if angle is None:
+            angle = random.random() * 360
         self.__super().watermark(image, alpha, x, y, scale, angle)
         return self
 
-    def padding(self,
-                top: Expression = '{}*ih'.format(random.random() * 0.25),
-                right: Expression = '{}*iw'.format(random.random() * 0.25),
-                bottom: Expression = '{}*ih'.format(random.random() * 0.25),
-                left: Expression = '{}*iw'.format(random.random() * 0.25),
-                ):
+    def padding(
+        self,
+        top: Optional[Expression] = None,
+        right: Optional[Expression] = None,
+        bottom: Optional[Expression] = None,
+        left: Optional[Expression] = None,
+    ):
+        if top is None:
+            top = '{}*ih'.format(random.random() * 0.25)
+        if right is None:
+            right = '{}*iw'.format(random.random() * 0.25)
+        if bottom is None:
+            bottom = '{}*ih'.format(random.random() * 0.25)
+        if left is None:
+            left = '{}*iw'.format(random.random() * 0.25)
         self.__super().padding(top, right, bottom, left)
         return self
 
-    def duration(self, ratio: float = 0.9 + random.random() * 0.1):
+    def duration(
+        self,
+        ratio: Optional[float] = None,
+    ):
+        if ratio is None:
+            ratio = 0.9 + random.random() * 0.1
         self.__super().duration(ratio)
         return self
 
-    def scale(self, ratio: float = 0.4 + random.random() * 0.8):
+    def scale(
+        self,
+        ratio: Optional[float] = None,
+    ):
+        if ratio is None:
+            ratio = 0.4 + random.random() * 0.8
         self.__super().scale(ratio)
         return self
 
-    def rotate(self, angle: float = random.random() * 360):
+    def rotate(
+        self,
+        angle: Optional[float] = None,
+    ):
+        if angle is None:
+            angle = random.random() * 360
         self.__super().rotate(angle)
         return self
 
-    def brightness(self, brightness: float = 0.4 + random.random() * 0.8):
+    def brightness(
+        self,
+        brightness: Optional[float] = None,
+    ):
+        if brightness is None:
+            brightness = 0.4 + random.random() * 0.8
         self.__super().brightness(brightness)
         return self
 
-    def crop(self,
-             w: Expression = '{}*iw'.format(0.9 + random.random() * 0.1),
-             h: Expression = '{}*iw'.format(0.9 + random.random() * 0.1),
-             x: Optional[Expression] = None,
-             y: Optional[Expression] = None,
-             ):
+    def crop(
+        self,
+        w: Optional[Expression] = None,
+        h: Optional[Expression] = None,
+        x: Optional[Expression] = None,
+        y: Optional[Expression] = None,
+    ):
+        if w is None:
+            w = '{}*iw'.format(0.9 + random.random() * 0.1)
+        if h is None:
+            h = '{}*ih'.format(0.9 + random.random() * 0.1)
         if x is None:
             x = '{}*(iw-{})'.format(random.random(), w)
         if y is None:
