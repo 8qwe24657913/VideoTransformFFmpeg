@@ -83,7 +83,8 @@ class Transform(object):
         for file in self.input:
             cmd += ['-i', file]
         if self.now_duration is not None:
-            cmd += ['-ss', '0', '-t', str(self.now_duration)]
+            cmd += ['-ss', str(self.now_duration[0]), '-t',
+                    str(self.now_duration[1])]
             if accurate_seek:
                 cmd += ['-accurate_seek', '-avoid_negative_ts', '1']
         if self.filter:
@@ -142,7 +143,7 @@ class Transform(object):
         return self
 
     # 更改长度：视频的保留比例
-    def duration(self, ratio: float = 1.0):
+    def duration(self, start_ratio: float = 0.0, ratio: float = 1.0):
         """
         更改视频时长，注意 ffmpeg 无法精确 seek 到某一帧而只能 seek 到最近的关键帧。此外由于使用时长比例计算，导致该方法会调用 ffprobe 提取视频信息
 
@@ -157,8 +158,12 @@ class Transform(object):
             duration = subprocess.run(
                 cmd, capture_output=True, check=True).stdout
             assert duration != 'N/A', 'duration info not available'
-            self.now_duration = float(duration)
-        self.now_duration *= ratio
+            self.now_duration: Tuple[float, float] = (0.0, float(duration))
+        start, end = self.now_duration
+        length = end - start
+        start += length * start_ratio
+        end = start + length * ratio
+        self.now_duration = (start, end)
         return self
 
     # 缩放：缩放比例
@@ -406,11 +411,14 @@ class RandomizedTransform(Transform):
 
     def duration(
         self,
+        start_ratio: Optional[float] = None,
         ratio: Optional[float] = None,
     ):
+        if start_ratio is None:
+            start_ratio = random.random() * 0.1 * (1.0 - (ratio or 0.0))
         if ratio is None:
-            ratio = 0.9 + random.random() * 0.1
-        self.__super().duration(ratio)
+            ratio = (0.9 + random.random() * 0.1) * (1.0 - start_ratio)
+        self.__super().duration(start_ratio, ratio)
         return self
 
     def scale(

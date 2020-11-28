@@ -45,6 +45,8 @@ padding.add_argument('-pl', '--padding_left', required=False,
 
 # 3 duration
 duration = parser.add_argument_group('duration', 'change duration by ratio')
+duration.add_argument('-ds', '--duration_start_ratio', required=False,
+                      type=float, help='start ratio of duration, (0, 1)')
 duration.add_argument('-dr', '--duration_ratio', required=False,
                       type=float, help='ratio of duration, (0, 1)')
 
