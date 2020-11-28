@@ -65,7 +65,7 @@ class Transform(object):
 
         self.filter = ''
         self.name: Optional[str] = self.__input(input)
-        self.now_duration = None
+        self.now_duration: Optional[Tuple[float, float]] = None
 
     def generate_cmd(self, output: FilePath, quiet: bool = True, y: bool = True, accurate_seek: bool = False) -> List[str]:
         """
@@ -152,13 +152,14 @@ class Transform(object):
         :raises AssertionError
         """
         assert self.parent is self, 'should be called against main branch'
+        assert start_ratio + ratio <= 1.0, 'should not longer than original video'
         if self.now_duration is None:
             cmd = ['ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
                    '-of', 'default=noprint_wrappers=1:nokey=1', self.input[0]]
             duration = subprocess.run(
                 cmd, capture_output=True, check=True).stdout
             assert duration != 'N/A', 'duration info not available'
-            self.now_duration: Tuple[float, float] = (0.0, float(duration))
+            self.now_duration = (0.0, float(duration))
         start, end = self.now_duration
         length = end - start
         start += length * start_ratio
