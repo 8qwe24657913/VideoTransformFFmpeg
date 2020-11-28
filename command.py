@@ -29,7 +29,7 @@ watermark.add_argument('-wy', '--watermark_y', required=False,
                        type=str, help='y offset of watermark')
 watermark.add_argument('-ws', '--watermark_scale', required=False,
                        type=float, help='scale of watermark, (0, +inf)')
-watermark.add_argument('-wr', '--watermark_rotate', '--watermark_angle', required=False,
+watermark.add_argument('-wr', '--watermark_rotate', '--watermark_angle', dest='watermark_angle', required=False,
                        type=float, help='rotate angle(clockwise) of watermark, [0, 360) in degrees')
 
 # 2 padding
@@ -64,14 +64,14 @@ rotate.add_argument('-ra', '--rotate_angle', required=False, type=float,
 
 # 7 brightness
 brightness = parser.add_argument_group('brightness', 'change brightness')
-brightness.add_argument('-b', '--brightness', '--brightness_brightness', required=False,
+brightness.add_argument('-b', '--brightness', metavar='BRIGHTNESS', dest='brightness_brightness', required=False,
                         type=float, help='brightness value')
 
 # 8 crop
 crop = parser.add_argument_group('crop', 'crop the input')
-crop.add_argument('-cw', '--crop_width', '--crop_w', required=False,
+crop.add_argument('-cw', '--crop_width', '--crop_w', dest='crop_w', required=False,
                   type=str, help='width **after** cropping')
-crop.add_argument('-ch', '--crop_height', '--crop_h', required=False,
+crop.add_argument('-ch', '--crop_height', '--crop_h', dest='crop_h', required=False,
                   type=str, help='height **after** cropping')
 crop.add_argument('-cx', '--crop_x', required=False,
                   type=str, help='x offset of cropping')
