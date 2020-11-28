@@ -9,7 +9,7 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument('input', type=str, action='append', nargs='+',
                     help='input file(s) or folder(s) containing input file(s)')
-parser.add_argument('-of', 'output_folder', required=False, type=str,
+parser.add_argument('-of', '--output_folder', required=False, type=str,
                     help='output folder, if not set, saves name_transformed.suffix into the input folder')
 
 parser.add_argument('-f', '--function', required=False,
