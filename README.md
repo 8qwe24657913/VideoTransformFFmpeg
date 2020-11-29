@@ -155,19 +155,17 @@ from transform import Transform, RandomizedTransform
 - k: 对每个应用几种变换
 
 
-### transform#generate_cmd(output, quiet, y, accurate_seek)
+### transform#generate_cmd(output, quiet, y, accurate_seek, other_commands)
 
 描述：生成执行变换所用的命令
 
 参数：
 
 - output: 输出文件路径
-
 - quiet: 静默模式，对应 ffmpeg 的 -v quiet
-
 - y: 不进行确认，对应 ffmpeg 的 -y
-
 - accurate_seek: 精准时间切割，对应 ffmpeg 的 -accurate_seek -avoid_negative_ts 1，**默认不开启**
+- other_commands: 其它 ffmpeg 的参数
 
 返回：执行变换所用的命令
 

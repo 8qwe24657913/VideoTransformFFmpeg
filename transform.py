@@ -36,7 +36,7 @@ Chooseable = Union[T, Sequence[T], Callable[[], T]]
 
 
 def choice(arg: Chooseable[T]) -> T:
-    if isinstance(arg, Sequence):
+    if isinstance(arg, list) and not isinstance(arg, str):
         return random.choice(arg)
     elif callable(arg):
         return arg()
@@ -66,7 +66,7 @@ class Transform(object):
         self.name: Optional[str] = self.__input(input)
         self.now_duration: Optional[Tuple[float, float]] = None
 
-    def generate_cmd(self, output: FilePath, quiet: bool = True, y: bool = True, accurate_seek: bool = False) -> List[str]:
+    def generate_cmd(self, output: FilePath, quiet: bool = True, y: bool = True, accurate_seek: bool = False, other_commands: List[str] = []) -> List[str]:
         """
         生成变换用的命令
 
@@ -74,6 +74,7 @@ class Transform(object):
         :param quiet: 静默模式，对应 ffmpeg 的 -v quiet
         :param y: 不进行确认，对应 ffmpeg 的 -y
         :param accurate_seek: 精准时间切割，对应 ffmpeg 的 -accurate_seek -avoid_negative_ts 1
+        :param other_commands: 其它 ffmpeg 的参数
         :returns: 变换用的命令
         :raises AssertionError
         """
@@ -92,6 +93,7 @@ class Transform(object):
             cmd += ['-v', 'quiet']
         if y:
             cmd += ['-y']
+        cmd += other_commands
         cmd += [output]
 
         return cmd
@@ -319,7 +321,7 @@ class Transform(object):
             kwargs = {
                 name: choice(argument) for name, argument in choice(args.get(method, {})).items()
             }
-            getattr(self, method)(self, **kwargs)
+            getattr(self, method)(**kwargs)
         return self
 
     # 以下为内部方法，不做调用方法注释，也不应被手动调用
@@ -453,8 +455,8 @@ class RandomizedTransform(Transform):
         if h is None:
             h = '{}*ih'.format(0.9 + random.random() * 0.1)
         if x is None:
-            x = '{}*(iw-{})'.format(random.random(), w)
+            x = '{}*(iw-ow)'.format(random.random(), w)
         if y is None:
-            y = '{}*(ih-{})'.format(random.random(), h)
+            y = '{}*(ih-oh)'.format(random.random(), h)
         self.__super().crop(w, h, x, y)
         return self

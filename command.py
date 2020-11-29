@@ -147,5 +147,5 @@ for input in inputs:
         transform.mixed(arguments, transform_methods, args.mixed_k)
     else:
         for method in transform_methods:
-            getattr(cls, method)(transform, **arguments['method'])
+            getattr(transform, method)(**arguments['method'])
     transform.run(assign_output(input))
