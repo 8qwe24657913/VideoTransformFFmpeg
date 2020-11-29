@@ -98,13 +98,11 @@ from transform import Transform, RandomizedTransform
 - w / h: 裁剪的宽度 / 高度
 - x / y: 裁剪窗口左上角距该视频 / 图像左上角的偏移量
 
-### Transform.mixed(inputs, args, methods, k, assign_output)
+### transform#mixed(args, methods, k)
 
 描述：以上八种进行随机组合
 
 参数：
-
-- inputs: 要变换的视频 / 图像的列表
 
 - args: 以上八个函数的参数，以 watermark 方法为例：
 
@@ -156,7 +154,6 @@ from transform import Transform, RandomizedTransform
 
 - k: 对每个应用几种变换
 
-- assign_output: 为每个输入文件指定一个输出文件，默认为在原文件名后加 `_transformed` 并保存到原目录
 
 ### transform#generate_cmd(output, quiet, y, accurate_seek)
 

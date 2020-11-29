@@ -2,7 +2,7 @@ import argparse
 import os
 from typing import Callable, Optional, Sequence
 
-from transform import FilePath, MethodName, RandomizedTransform, Transform
+from transform.transform import FilePath, MethodName, RandomizedTransform, Transform
 
 parser = argparse.ArgumentParser(
     description='Transform input file(s) with ffmpeg')
@@ -139,19 +139,13 @@ if 'watermark' in arguments:
     assert image is not None, 'should specify watermark image'
     images = resolve_files(image)
     assert len(images) > 0, 'should supply at least 1 watermark image'
-    if args.randomize:
-        arguments['watermark']['image'] = images
-    else:
-        assert len(
-            images) == 1, 'should supply only 1 watermark image when randomization is not enabled'
-        arguments['watermark']['image'] = images[0]
+    arguments['watermark']['image'] = images
 
-if args.mixed:
-    cls.mixed(inputs, arguments, transform_methods,
-              args.mixed_k, assign_output)
-else:
-    for input in inputs:
-        transform = cls(input)
+for input in inputs:
+    transform = cls(input)
+    if args.mixed:
+        transform.mixed(arguments, transform_methods, args.mixed_k)
+    else:
         for method in transform_methods:
             getattr(cls, method)(transform, **arguments['method'])
-        transform.run(assign_output(input))
+    transform.run(assign_output(input))

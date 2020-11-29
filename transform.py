@@ -3,7 +3,6 @@
 from __future__ import annotations
 # python >= 3.7.0b1 才可使用，python >= 3.10 开始不再需要 import，如果你的 python 版本不够，尝试注释掉该条 import 语句并删除带有 Transform 字样的类型标注或是将其改为字符串 'Transform' 即可让其运行起来
 
-import os
 import random
 import subprocess
 from typing import (Callable, Dict, List, Optional, Sequence, Tuple, TypeVar,
@@ -261,19 +260,15 @@ class Transform(object):
     )
 
     # 混合：前八种变换方式随机混合
-    @classmethod
     def mixed(
-        cls,
-        inputs: Sequence[FilePath],
+        self,
         args: ArgumentsForMethod = {},
         methods: Sequence[MethodName] = methods,
         k: Optional[Chooseable[int]] = None,
-        assign_output: Callable[[FilePath], FilePath] = lambda input: '_transformed'.join(os.path.splitext(input)),
     ):
         """
         将前八种变换方式随机混合
 
-        :param inputs: 输入文件列表
         :param args: 传入各函数的参数或参数取值的可选列表，以 watermark 方法为例：
             固定单组参数：
             {
@@ -315,20 +310,17 @@ class Transform(object):
             }
         :param methods: 要使用的变换列表，默认为全部八种变换
         :param k: 对每个应用几种变换
-        :param assign_output: 为每个输入文件指定一个输出文件，默认为在原文件名后加 '_transformed' 并保存到原目录
         :returns: self
         """
-        def random_k(): return random.randint(1, len(methods))
         if k is None:
+            def random_k(): return random.randint(1, len(methods))
             k = random_k
-        for input in inputs:
-            transform = cls(input)
-            for method in random.sample(methods, k=choice(k)):
-                kwargs = {
-                    name: choice(argument) for name, argument in choice(args.get(method, {})).items()
-                }
-                getattr(cls, method)(transform, **kwargs)
-            transform.run(assign_output(input))
+        for method in random.sample(methods, k=choice(k)):
+            kwargs = {
+                name: choice(argument) for name, argument in choice(args.get(method, {})).items()
+            }
+            getattr(self, method)(self, **kwargs)
+        return self
 
     # 以下为内部方法，不做调用方法注释，也不应被手动调用
     def __input(self, input: FilePath) -> str:
