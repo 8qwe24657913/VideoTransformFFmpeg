@@ -48,6 +48,8 @@ from transform import Transform, RandomizedTransform
 
 - top / right / bottom / left: 上 / 右 / 下 / 左侧黑边的宽度
 
+**注意：最终的大小将被向上入到最近的偶数，这是为了避免 ffmpeg 将其舍到最近的偶数后原视频区域超出新的大小，从而产生报错**
+
 ### transform#duration(start_ratio, ratio)
 
 描述：从**视频**中截取一段
@@ -55,7 +57,8 @@ from transform import Transform, RandomizedTransform
 参数：
 
 - start_ratio: 要截取的段的开始位置占视频时长的比例，取值范围 [0, 1]
-- ratio: 要截取的段的长度占视频时长的比例，取值范围 [0, 1]最近
+- ratio: 要截取的段的长度占视频时长的比例，取值范围 [0, 1]
+- duration: 视频的长度，用于避免通过 ffprobe 获取长度
 
 **注意：FFmpeg 定位时会自动定位到最近的关键帧，因此可能不会精确定位**
 
@@ -66,6 +69,8 @@ from transform import Transform, RandomizedTransform
 参数：
 
 - scale: 缩放比例
+
+**注意：最终大小将被四舍五入到最近的偶数，因为 ffmpeg 无法处理缩放到奇数大小的情况**
 
 ### transform#mirror()
 

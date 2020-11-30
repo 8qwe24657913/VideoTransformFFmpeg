@@ -7,19 +7,15 @@ import random
 import subprocess
 from typing import (Callable, Dict, List, Optional, Sequence, Tuple, TypeVar,
                     Union)
+import ffmpeg
+import math
 
 # ffmpeg 表达式
 Expression = Union[int, float, str]
 # 文件的路径
 FilePath = str
 # 文件的参数及路径
-
-
-class FileParameters(object):
-    def __init__(self, parameters: List[str]):
-        self.parameters = parameters
-
-
+FileParameters = Dict[str, str]
 # 文件描述
 FileDesc = Union[FilePath, FileParameters]
 # 方法的参数
@@ -55,32 +51,24 @@ def choice(arg: Chooseable[T]) -> T:
 
 
 class Transform(object):
-    __slots__ = ['input', 'temp_idx', 'parent',
-                 'filter', 'name', 'now_duration']
+    __slots__ = ['input', 'stream', 'now_duration']
 
-    def __init__(self, input: FileDesc, _parent: Optional[Transform] = None):
+    def __init__(self, input: FileDesc):
         """
         初始化视频/图片变换类
 
         :param input: 要处理的视频/图片，注意本类中输入的视频/图片路径可能不会被实际确认是否存在
         :param _parent: 内部参数，不需要也不应手动传入
         """
-        if _parent is None:
-            self.input: List[FileDesc] = []
-            self.temp_idx = 0
-            self.parent = self
-        else:
-            self.parent = _parent.parent
-
-        self.filter = ''
-        self.name: Optional[str] = self.__input(input)
+        self.input = input
+        self.stream: ffmpeg.Stream = self.__input(input)
         self.now_duration: Optional[Tuple[float, float]] = None
 
     def generate_cmd(self, output: FileDesc, quiet: bool = True, y: bool = True, accurate_seek: bool = False, other_commands: List[str] = []) -> List[str]:
         """
         生成变换用的命令
 
-        :param output: 输出文件路径
+        :param output: 输出文件
         :param quiet: 静默模式，对应 ffmpeg 的 -v quiet
         :param y: 不进行确认，对应 ffmpeg 的 -y
         :param accurate_seek: 精准时间切割，对应 ffmpeg 的 -accurate_seek -avoid_negative_ts 1
@@ -88,31 +76,27 @@ class Transform(object):
         :returns: 变换用的命令
         :raises AssertionError
         """
-        assert self.parent is self, 'should be called against main branch'
-        cmd = ['ffmpeg']
-        for file in self.input:
-            cmd += ['-i', file]
+
+        cmd = []
         if self.now_duration is not None:
             cmd += ['-ss', str(self.now_duration[0]), '-t',
                     str(self.now_duration[1])]
             if accurate_seek:
                 cmd += ['-accurate_seek', '-avoid_negative_ts', '1']
-        if self.filter:
-            cmd += ['-filter_complex', self.filter]
         if quiet:
             cmd += ['-v', 'quiet']
-        if y:
-            cmd += ['-y']
         cmd += other_commands
-        cmd += self.__get_file_parameters(output)
+        stream = ffmpeg.output(
+            self.stream, **self.__get_file_parameters(output))
+        stream = ffmpeg.nodes.GlobalNode(stream, 'my_args', cmd).stream()
 
-        return cmd
+        return ffmpeg.compile(stream, overwrite_output=y)
 
     def run(self, output: FileDesc, **kwargs) -> subprocess.CompletedProcess[bytes]:
         """
         执行变换
 
-        :param output: 输出文件路径
+        :param output: 输出文件
         :param **kwargs: 其它 param 参考 generate_cmd()
         :returns: CompletedProcess 对象
         :raises AssertionError
@@ -132,9 +116,11 @@ class Transform(object):
         :param angle: 顺时针旋转角度，角度制
         :returns: self
         """
-        self.__merge(
-            Transform(image, self).scale(scale).rotate(angle).alpha(alpha),
-            'overlay={}:{}'.format(x, y)
+        self.stream = ffmpeg.overlay(
+            self.stream,
+            Transform(image).scale(scale).rotate(angle).alpha(alpha).stream,
+            x=x,
+            y=y,
         )
         return self
 
@@ -149,27 +135,31 @@ class Transform(object):
         :param left: 左方边框宽度
         :returns: self
         """
-        self.__chain('pad=iw+{}+{}:ih+{}+{}:{}:{}'.format(left,
-                                                          right, top, bottom, left, top))
+        # http://trac.ffmpeg.org/ticket/1618
+        self.filter(
+            'pad',
+            'ceil((iw+x+{})/2)*2'.format(right),
+            'ceil((ih+y+{})/2)*2'.format(bottom),
+            'round({})'.format(left),
+            'round({})'.format(top),
+        )
         return self
 
     # 更改长度：视频的保留比例
-    def duration(self, start_ratio: float = 0.0, ratio: float = 1.0):
+    def duration(self, start_ratio: float = 0.0, ratio: float = 1.0, duration=None):
         """
         更改视频时长，注意 ffmpeg 无法精确 seek 到某一帧而只能 seek 到最近的关键帧。此外由于使用时长比例计算，导致该方法会调用 ffprobe 提取视频信息
 
+        :param start_ratio: 视频开始的比例
         :param ratio: 视频的保留比例
+        :param duration: 视频的长度，用于避免通过 ffprobe 获取长度
         :returns: self
         :raises AssertionError
         """
-        assert self.parent is self, 'should be called against main branch'
         assert start_ratio + ratio <= 1.0, 'should not longer than original video'
         if self.now_duration is None:
-            cmd = ['ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
-                   '-of', 'default=noprint_wrappers=1:nokey=1', self.input[0]]
-            duration = subprocess.run(
-                cmd, capture_output=True, check=True).stdout
-            assert duration != 'N/A', 'duration info not available'
+            if duration is None:
+                duration = ffmpeg.probe(self.input)['format']['duration']
             self.now_duration = (0.0, float(duration))
         start, end = self.now_duration
         length = end - start
@@ -188,8 +178,11 @@ class Transform(object):
         """
         if ratio != 1.0:
             # 为什么只能是偶数？
-            self.__chain(
-                'scale=round(iw*{}/2)*2:round(ih*{}/2)*2'.format(ratio, ratio))
+            self.filter(
+                'scale',
+                'round(iw*{}/2)*2'.format(ratio),
+                'round(ih*{}/2)*2'.format(ratio),
+            )
         return self
 
     # 镜像
@@ -199,7 +192,7 @@ class Transform(object):
 
         :returns: self
         """
-        self.__chain('hflip')
+        self.filter('hflip')
         return self
 
     # 旋转：旋转角度
@@ -212,15 +205,23 @@ class Transform(object):
         """
         angle %= 360
         if angle == 90:
-            self.__chain('transpose=1')
+            self.filter('transpose', '1')
         elif angle == 180:
-            self.__chain('transpose=1,transpose=1')
+            self.filter('transpose', '1').filter('transpose', '1')
         elif angle == 270:
-            self.__chain('transpose=2')
+            self.filter('transpose', '2')
         elif angle != 0:
+            radian = math.radians(angle)
+            abssin = abs(math.sin(radian))
+            abscos = abs(math.cos(radian))
             radian = '{}*PI/180'.format(angle)
-            self.__chain('rotate={}:iw*abs(cos({}))+ih*abs(sin({})):iw*abs(sin({}))+ih*abs(cos({})):fillcolor=none'.format(
-                *(radian,)*5))
+            self.filter(
+                'rotate',
+                radian,
+                'iw*{}+ih*{}'.format(abscos, abssin),
+                'iw*{}+ih*{}'.format(abssin, abscos),
+                fillcolor='none',
+            )
         return self
 
     # 亮度：明暗度数
@@ -231,7 +232,7 @@ class Transform(object):
         :param brightness: 亮度
         :returns: self
         """
-        self.__chain('eq=brightness={}'.format(brightness))
+        self.filter('eq', brightness=brightness)
         return self
 
     # 剪切：剪切位置、比例
@@ -245,7 +246,13 @@ class Transform(object):
         :param y: 裁剪竖直起始位置
         :returns: self
         """
-        self.__chain('crop={}:{}:{}:{}'.format(w, h, x, y))
+        self.filter(
+            'crop',
+            w=w,
+            h=h,
+            x=x,
+            y=y,
+        )
         return self
 
     def alpha(self, alpha: float = 1.0):
@@ -255,9 +262,11 @@ class Transform(object):
         :param alpha: 透明度
         :returns: self
         """
-        if alpha != 1.0:
-            self.__chain(
-                "format=rgba,colorchannelmixer=aa={}".format(alpha))
+        self.filter('format', 'rgba').filter('colorchannelmixer', aa=alpha)
+        return self
+
+    def filter(self, *args, **kwargs):
+        self.stream = ffmpeg.filter(self.stream, *args, **kwargs)
         return self
 
     methods: Sequence[MethodName] = (
@@ -335,41 +344,15 @@ class Transform(object):
         return self
 
     # 以下为内部方法，不做调用方法注释，也不应被手动调用
+
     @staticmethod
-    def __get_file_parameters(file: FileDesc) -> List[str]:
-        return file.parameters if isinstance(file, FileParameters) else ['-i', file]
+    def __get_file_parameters(file: FileDesc) -> FileParameters:
+        return file if isinstance(file, dict) else {
+            'filename': file,
+        }
 
-    def __input(self, input: FileDesc) -> str:
-        self.parent.input += self.__get_file_parameters(input)
-        return str(len(self.parent.input) - 1)
-
-    def __gen_temp(self) -> str:
-        self.parent.temp_idx += 1
-        return "temp{}".format(self.parent.temp_idx)
-
-    def __end(self) -> Tuple[str, str]:
-        if self.name:
-            return self.name, self.filter
-        name = self.__gen_temp()
-        self.filter += '[{}]'.format(name)
-        return name, self.filter
-
-    def __sep(self, sep) -> str:
-        return sep if self.filter != '' else ''
-
-    def __chain(self, filter: str):
-        if self.name:
-            self.filter += '[{}]{}'.format(self.name, filter)
-            self.name = None
-        else:
-            self.filter += self.__sep(',') + filter
-
-    def __merge(self, another: Transform, merger: str):
-        name, _ = self.__end()
-        name2, filter2 = another.__end()
-        self.filter += '{}{};[{}][{}]{}'.format(
-            self.__sep(';'), filter2, name, name2, merger)
-        self.name = None
+    def __input(self, input: FileDesc) -> ffmpeg.Stream:
+        return ffmpeg.input(**self.__get_file_parameters(input))
 
 
 # 默认参数为随机的 Transform 类
@@ -474,3 +457,6 @@ class RandomizedTransform(Transform):
             y = '{}*(ih-oh)'.format(random.random(), h)
         self.__super().crop(w, h, x, y)
         return self
+
+
+__all__ = ('Transform', 'RandomizedTransform')
