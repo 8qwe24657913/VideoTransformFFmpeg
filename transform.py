@@ -12,6 +12,16 @@ from typing import (Callable, Dict, List, Optional, Sequence, Tuple, TypeVar,
 Expression = Union[int, float, str]
 # 文件的路径
 FilePath = str
+# 文件的参数及路径
+
+
+class FileParameters(object):
+    def __init__(self, parameters: List[str]):
+        self.parameters = parameters
+
+
+# 文件描述
+FileDesc = Union[FilePath, FileParameters]
 # 方法的参数
 Argument = Union[Expression, FilePath]
 # 为参数指定一个列表，意为在列表中随机选择一个
@@ -36,7 +46,7 @@ Chooseable = Union[T, Sequence[T], Callable[[], T]]
 
 
 def choice(arg: Chooseable[T]) -> T:
-    if isinstance(arg, list) and not isinstance(arg, str):
+    if isinstance(arg, Sequence) and not isinstance(arg, str):
         return random.choice(arg)
     elif callable(arg):
         return arg()
@@ -48,7 +58,7 @@ class Transform(object):
     __slots__ = ['input', 'temp_idx', 'parent',
                  'filter', 'name', 'now_duration']
 
-    def __init__(self, input: FilePath, _parent: Optional[Transform] = None):
+    def __init__(self, input: FileDesc, _parent: Optional[Transform] = None):
         """
         初始化视频/图片变换类
 
@@ -56,7 +66,7 @@ class Transform(object):
         :param _parent: 内部参数，不需要也不应手动传入
         """
         if _parent is None:
-            self.input: List[FilePath] = []
+            self.input: List[FileDesc] = []
             self.temp_idx = 0
             self.parent = self
         else:
@@ -66,7 +76,7 @@ class Transform(object):
         self.name: Optional[str] = self.__input(input)
         self.now_duration: Optional[Tuple[float, float]] = None
 
-    def generate_cmd(self, output: FilePath, quiet: bool = True, y: bool = True, accurate_seek: bool = False, other_commands: List[str] = []) -> List[str]:
+    def generate_cmd(self, output: FileDesc, quiet: bool = True, y: bool = True, accurate_seek: bool = False, other_commands: List[str] = []) -> List[str]:
         """
         生成变换用的命令
 
@@ -94,11 +104,11 @@ class Transform(object):
         if y:
             cmd += ['-y']
         cmd += other_commands
-        cmd += [output]
+        cmd += self.__get_file_parameters(output)
 
         return cmd
 
-    def run(self, output: FilePath, **kwargs) -> subprocess.CompletedProcess[bytes]:
+    def run(self, output: FileDesc, **kwargs) -> subprocess.CompletedProcess[bytes]:
         """
         执行变换
 
@@ -110,7 +120,7 @@ class Transform(object):
         return subprocess.run(self.generate_cmd(output, **kwargs), check=True, stderr=subprocess.STDOUT)
 
     # 水印/字幕：水印/字幕图像，透明度，位置，大小，角度
-    def watermark(self, image: FilePath, alpha: float = 1.0, x: Expression = 0, y: Expression = 0, scale: float = 1.0, angle: float = 0.0):
+    def watermark(self, image: FileDesc, alpha: float = 1.0, x: Expression = 0, y: Expression = 0, scale: float = 1.0, angle: float = 0.0):
         """
         为视频/图片添加水印/字幕
 
@@ -325,8 +335,12 @@ class Transform(object):
         return self
 
     # 以下为内部方法，不做调用方法注释，也不应被手动调用
-    def __input(self, input: FilePath) -> str:
-        self.parent.input.append(input)
+    @staticmethod
+    def __get_file_parameters(file: FileDesc) -> List[str]:
+        return file.parameters if isinstance(file, FileParameters) else ['-i', file]
+
+    def __input(self, input: FileDesc) -> str:
+        self.parent.input += self.__get_file_parameters(input)
         return str(len(self.parent.input) - 1)
 
     def __gen_temp(self) -> str:
@@ -374,7 +388,7 @@ class RandomizedTransform(Transform):
         angle: Optional[float] = None,
     ):
         if alpha is None:
-            alpha = random.random()
+            alpha = 0.3 + random.random() * 0.7
         if x is None:
             x = '{}*(W-w)'.format(random.random())
         if y is None:
