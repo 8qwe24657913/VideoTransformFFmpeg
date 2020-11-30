@@ -77,18 +77,19 @@ class Transform(object):
         :raises AssertionError
         """
 
-        cmd = []
+        args = []
         if self.now_duration is not None:
-            cmd += ['-ss', str(self.now_duration[0]), '-t',
-                    str(self.now_duration[1])]
+            args += ['-ss', str(self.now_duration[0]), '-t',
+                     str(self.now_duration[1])]
             if accurate_seek:
-                cmd += ['-accurate_seek', '-avoid_negative_ts', '1']
+                args += ['-accurate_seek', '-avoid_negative_ts', '1']
         if quiet:
-            cmd += ['-v', 'quiet']
-        cmd += other_commands
+            args += ['-v', 'quiet']
+        args += other_commands
         stream = ffmpeg.output(
             self.stream, **self.__get_file_parameters(output))
-        stream = ffmpeg.nodes.GlobalNode(stream, 'my_args', cmd).stream()
+        if args:
+            stream = ffmpeg.nodes.GlobalNode(stream, 'my_args', args).stream()
 
         return ffmpeg.compile(stream, overwrite_output=y)
 
