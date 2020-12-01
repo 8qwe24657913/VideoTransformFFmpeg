@@ -15,7 +15,7 @@ Expression = Union[int, float, str]
 # 文件的路径
 FilePath = str
 # 文件的参数及路径
-FileParameters = Dict[str, str]
+FileParameters = Dict[str, Optional[str]]
 # 文件描述
 FileDesc = Union[FilePath, FileParameters]
 # 方法的参数
@@ -60,11 +60,11 @@ class Transform(object):
         :param input: 要处理的视频/图片，注意本类中输入的视频/图片路径可能不会被实际确认是否存在
         :param _parent: 内部参数，不需要也不应手动传入
         """
-        self.input = input
-        self.stream: ffmpeg.Stream = self.__input(input)
+        self.input = self.__get_file_parameters(input)
+        self.stream: ffmpeg.Stream = self.__input(self.input)
         self.now_duration: Optional[Tuple[float, float]] = None
 
-    def generate_cmd(self, output: FileDesc, quiet: bool = True, y: bool = True, accurate_seek: bool = False, other_commands: List[str] = []) -> List[str]:
+    def generate_cmd(self, output: FileDesc, quiet: bool = True, y: bool = True, accurate_seek: bool = False, other_args: List[str] = []) -> List[str]:
         """
         生成变换用的命令
 
@@ -72,24 +72,35 @@ class Transform(object):
         :param quiet: 静默模式，对应 ffmpeg 的 -v quiet
         :param y: 不进行确认，对应 ffmpeg 的 -y
         :param accurate_seek: 精准时间切割，对应 ffmpeg 的 -accurate_seek -avoid_negative_ts 1
-        :param other_commands: 其它 ffmpeg 的参数
+        :param other_args: 其它 ffmpeg 的参数
         :returns: 变换用的命令
         :raises AssertionError
         """
 
-        args = []
+        global_args = []
         if self.now_duration is not None:
-            args += ['-ss', str(self.now_duration[0]), '-t',
-                     str(self.now_duration[1])]
+            self.input.update({
+                'ss': str(self.now_duration[0]),
+                't': str(self.now_duration[1]),
+            })
             if accurate_seek:
-                args += ['-accurate_seek', '-avoid_negative_ts', '1']
+                self.input.update({
+                    'accurate_seek': None,
+                    'avoid_negative_ts': '1',
+                })
         if quiet:
-            args += ['-v', 'quiet']
-        args += other_commands
-        stream = self.stream
-        if args:
-            stream = ffmpeg.nodes.GlobalNode(stream, 'my_args', args).stream()
-        stream = ffmpeg.output(stream, **self.__get_file_parameters(output))
+            global_args += ['-v', 'quiet']
+        global_args += other_args
+        stream = ffmpeg.output(
+            self.stream,
+            **self.__get_file_parameters(output),
+        )
+        if global_args:
+            stream = ffmpeg.nodes.GlobalNode(
+                stream,
+                'my_args',
+                global_args
+            ).stream()
 
         return ffmpeg.compile(stream, overwrite_output=y)
 
@@ -160,7 +171,8 @@ class Transform(object):
         assert start_ratio + ratio <= 1.0, 'should not longer than original video'
         if self.now_duration is None:
             if duration is None:
-                duration = ffmpeg.probe(self.input)['format']['duration']
+                filename = self.input['filename']
+                duration = ffmpeg.probe(filename)['format']['duration']
             self.now_duration = (0.0, float(duration))
         start, end = self.now_duration
         length = end - start
