@@ -86,10 +86,10 @@ class Transform(object):
         if quiet:
             args += ['-v', 'quiet']
         args += other_commands
-        stream = ffmpeg.output(
-            self.stream, **self.__get_file_parameters(output))
+        stream = self.stream
         if args:
             stream = ffmpeg.nodes.GlobalNode(stream, 'my_args', args).stream()
+        stream = ffmpeg.output(stream, **self.__get_file_parameters(output))
 
         return ffmpeg.compile(stream, overwrite_output=y)
 
